@@ -3,8 +3,14 @@ name: Deploy to Uffizzi Redash Project
 on:
   pull_request:
     types: [opened,reopened,synchronize,closed]
-  push:
-    branches: [main]  # 添加 push 触发器，可以直接推送到 main 分支
+
+# 在顶层添加权限设置
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+  issues: write      # 添加 issues 写权限
+  statuses: write    # 添加状态写权限
 
 jobs:
   render-compose-file:
@@ -16,7 +22,7 @@ jobs:
       compose-file-cache-path: docker-compose.rendered.yml
     steps:
       - name: Checkout git repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4  # 升级到 v4
       - name: Copy Compose File
         run: |
           cp docker-compose.uffizzi.yml docker-compose.rendered.yml
@@ -33,27 +39,38 @@ jobs:
   deploy-uffizzi-preview:
     name: Deploy to Uffizzi Redash Project
     needs: render-compose-file
-    uses: UffizziCloud/preview-action/.github/workflows/reusable.yaml@v3
-    with:
-      compose-file-cache-key: ${{ needs.render-compose-file.outputs.compose-file-cache-key }}
-      compose-file-cache-path: ${{ needs.render-compose-file.outputs.compose-file-cache-path }}
-      server: https://app.uffizzi.com
-      project: redash  # 指定你的项目名称
-    permissions:
-      contents: read
-      pull-requests: write
-      id-token: write
-      
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Download Compose File
+        uses: actions/cache@v3
+        with:
+          path: docker-compose.rendered.yml
+          key: ${{ needs.render-compose-file.outputs.compose-file-cache-key }}
+          
+      - name: Deploy to Uffizzi
+        uses: UffizziCloud/preview-action@v2  # 使用 v2 版本
+        with:
+          compose-file: 'docker-compose.rendered.yml'
+          server: 'https://app.uffizzi.com'
+          # project: 'redash'  # 先注释掉项目名称，让它使用默认项目
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
   delete-uffizzi-preview:
-    name: Delete Preview from Redash Project
-    uses: UffizziCloud/preview-action/.github/workflows/reusable.yaml@v3
     if: ${{ github.event_name == 'pull_request' && github.event.action == 'closed' }}
-    with:
-      compose-file-cache-key: ''
-      compose-file-cache-path: docker-compose.rendered.yml
-      server: https://app.uffizzi.com
-      project: redash  # 指定你的项目名称
-    permissions:
-      contents: read
-      pull-requests: write
-      id-token: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Delete Preview
+        uses: UffizziCloud/preview-action@v2
+        with:
+          compose-file: 'docker-compose.uffizzi.yml'
+          server: 'https://app.uffizzi.com'
+          action: 'delete'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
