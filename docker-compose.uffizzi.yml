@@ -1,0 +1,20 @@
+# docker-compose.uffizzi.yml
+x-uffizzi:
+  ingress:
+    service: redash-app
+    port: 80
+  continuous_previews:
+    delete_preview_after: 1h
+
+services:
+  redash-app:
+    image: ghcr.io/kamanorga/uffizzi:latest
+    ports:
+      - "80:8080"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    # 如果需要环境变量，可以添加：
+    # environment:
+    #   - ENV_VAR=value
